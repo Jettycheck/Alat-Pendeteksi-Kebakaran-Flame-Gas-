@@ -1,0 +1,33 @@
+/* Cara menggunakan sensor hujan dengan servo otomatis jemuran.
+   Dibuat oleh tim SriTu Tech (dimodifikasi).
+   Ketika hujan deras, LED menyala dan servo melipat jemuran otomatis.
+*/
+
+#include <Servo.h>
+
+Servo jemuran;                 // Objek servo untuk jemuran
+
+void setup() {
+  Serial.begin(9600);          // Aktifkan monitor serial
+  pinMode(4, OUTPUT);          // Tetapkan pin LED sebagai OUTPUT
+  jemuran.attach(6);           // Hubungkan servo ke pin digital 6
+  jemuran.write(90);           // Posisi awal jemuran (terbuka)
+}
+
+void loop() {
+  int nilai = analogRead(A3); // Baca nilai dari sensor hujan
+  Serial.print("Nilai : ");
+  Serial.println(nilai);
+
+  if (nilai < 300) {           // Jika terdeteksi hujan deras
+    digitalWrite(4, HIGH);     // Nyalakan LED sebagai indikator
+    jemuran.write(0);          // Gerakkan servo untuk melipat jemuran
+    Serial.println("Hujan deras - LED menyala, jemuran dilipat");
+  } else {
+    digitalWrite(4, LOW);      // Matikan LED jika tidak hujan deras
+    jemuran.write(90);         // Kembalikan posisi jemuran
+    Serial.println("Tidak hujan - jemuran dibuka kembali");
+  }
+
+  delay(1000); // Tunggu 1 detik sebelum pembacaan berikutnya
+}
