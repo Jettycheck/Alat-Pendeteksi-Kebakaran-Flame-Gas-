@@ -1,0 +1,63 @@
+/* Kode Pemindaian Kartu RFID
+ * Sumber: https://srituhobby.com (sudah disesuaikan)
+ */
+ 
+#include <LiquidCrystal_I2C.h>
+#include <SPI.h>
+#include <MFRC522.h>
+
+// Definisi pin untuk modul RFID
+#define RST_PIN 9
+#define SS_PIN  10
+
+byte kartuTerbaca[4];  // Menyimpan UID kartu
+byte kolom = 0;        // Posisi kolom di LCD
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+void setup() {
+  Serial.begin(9600);         // Mulai komunikasi serial
+  lcd.init();                 // Inisialisasi LCD
+  lcd.backlight();           // Nyalakan lampu latar LCD
+  while (!Serial);            // Tunggu hingga serial siap
+  SPI.begin();                // Mulai komunikasi SPI
+  rfid.PCD_Init();            // Inisialisasi pembaca RFID
+  delay(4);                   
+  rfid.PCD_DumpVersionToSerial();  // Tampilkan versi firmware RFID
+
+  lcd.setCursor(2, 0);
+  lcd.print("Tempelkan Kartu");     // Teks tampilan awal
+}
+
+void loop() {
+  if ( ! rfid.PICC_IsNewCardPresent()) {
+    return 0;  // Tidak ada kartu baru, keluar dari loop
+  }
+  if ( ! rfid.PICC_ReadCardSerial()) {
+    return 0;  // Gagal membaca kartu, keluar dari loop
+  }
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("UID Terbaca");        // Tampilkan pesan saat UID dibaca
+  kolom = 0;
+
+  Serial.println(F("UID Kartu yang Terbaca:"));
+  for (uint8_t i = 0; i < 4; i++) {
+    kartuTerbaca[i] = rfid.uid.uidByte[i];
+    Serial.print(kartuTerbaca[i], HEX);
+    Serial.print(" ");
+
+    lcd.setCursor(kolom, 1);
+    lcd.print(kartuTerbaca[i], HEX);
+    lcd.print(" ");
+    delay(500);
+
+    kolom += 3;
+  }
+
+  Serial.println();
+  rfid.PICC_HaltA();  // Hentikan komunikasi dengan kartu
+  return 1;
+}
