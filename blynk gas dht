@@ -1,0 +1,146 @@
+#define BLYNK_PRINT Serial
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <DHT.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+
+char auth[] = "YOUR_BLYNK_AUTH_TOKEN";
+char ssid[] = "YOUR_WIFI_SSID";
+char pass[] = "YOUR_WIFI_PASSWORD";
+
+#define DHTPIN 8
+#define DHTTYPE DHT22
+#define BUZZER_PIN 6
+#define GAS_SENSOR_PIN A1
+#define LED_PIN 5
+
+const float AMBANG_SUHU_BAHAYA = 45.0;
+const int AMBANG_GAS_BAHAYA = 400;
+
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+bool alarmSuhuAktif = false;
+bool alarmGasAktif = false;
+bool alarmKebakaranAktif = false;
+
+BlynkTimer timer;
+
+void sendSensorData() {
+  float suhu = dht.readTemperature();
+  float kelembapan = dht.readHumidity();
+  int gasValue = analogRead(GAS_SENSOR_PIN);
+
+  if (isnan(suhu) || isnan(kelembapan)) {
+    Serial.println("Gagal membaca dari sensor DHT!");
+    Blynk.virtualWrite(V0, "Error");
+    Blynk.virtualWrite(V1, "Error");
+    return;
+  }
+
+  Blynk.virtualWrite(V0, suhu);
+  Blynk.virtualWrite(V1, kelembapan);
+  Blynk.virtualWrite(V2, gasValue);
+
+  alarmSuhuAktif = (suhu >= AMBANG_SUHU_BAHAYA);
+  alarmGasAktif = (gasValue >= AMBANG_GAS_BAHAYA);
+
+  if (!alarmSuhuAktif && !alarmGasAktif) {
+    Blynk.virtualWrite(V3, 0);
+    Blynk.virtualWrite(V4, 0);
+    Blynk.virtualWrite(V5, 0);
+    Blynk.virtualWrite(V6, 0);
+    Blynk.setProperty(V7, "color", "#00FF00");
+    Blynk.virtualWrite(V7, "AMAN");
+  } else if (alarmSuhuAktif && !alarmGasAktif) {
+    Blynk.virtualWrite(V3, 0);
+    Blynk.virtualWrite(V4, 255);
+    Blynk.virtualWrite(V5, 0);
+    Blynk.virtualWrite(V6, 0);
+    Blynk.setProperty(V7, "color", "#FFA500");
+    Blynk.virtualWrite(V7, "SUHU TINGGI!");
+  } else if (!alarmSuhuAktif && alarmGasAktif) {
+    Blynk.virtualWrite(V3, 0);
+    Blynk.virtualWrite(V4, 0);
+    Blynk.virtualWrite(V5, 255);
+    Blynk.virtualWrite(V6, 0);
+    Blynk.setProperty(V7, "color", "#FFA500");
+    Blynk.virtualWrite(V7, "GAS BERBAHAYA!");
+  } else if (alarmSuhuAktif && alarmGasAktif) {
+    Blynk.virtualWrite(V3, 0);
+    Blynk.virtualWrite(V4, 0);
+    Blynk.virtualWrite(V5, 0);
+    Blynk.virtualWrite(V6, 255);
+    Blynk.setProperty(V7, "color", "#FF0000");
+    Blynk.virtualWrite(V7, "KEBAKARAN!");
+  }
+}
+
+void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Sistem Deteksi");
+  lcd.setCursor(0, 1);
+  lcd.print(" Kebakaran");
+  delay(2000);
+  lcd.clear();
+
+  dht.begin();
+
+  Blynk.begin(auth, ssid, pass);
+
+  timer.setInterval(2000L, sendSensorData);
+
+  Serial.println("Sistem Deteksi Kebakaran Aktif!");
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+
+  bool suhuTerdeteksi = (dht.readTemperature() >= AMBANG_SUHU_BAHAYA);
+  bool gasTerdeteksi = (analogRead(GAS_SENSOR_PIN) >= AMBANG_GAS_BAHAYA);
+
+  if (!suhuTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, LOW);
+    lcd.setCursor(0, 0);
+    lcd.print("Suhu:"); lcd.print(dht.readTemperature()); lcd.print((char)223); lcd.print("C");
+    lcd.setCursor(0, 1);
+    lcd.print("Gas:"); lcd.print(analogRead(GAS_SENSOR_PIN)); lcd.print(" AMAN ");
+  } else if (suhuTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print("SUHU TINGGI! ");
+  } else if (!suhuTerdeteksi && gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print(" GAS TERDETEKSI!");
+  } else if (suhuTerdeteksi && gasTerdeteksi) {
+    tone(BUZZER_PIN, 1000);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!!! KEBAKARAN !!!");
+    lcd.setCursor(0, 1);
+    lcd.print("API TERDETEKSI! ");
+    delay(200);
+    digitalWrite(LED_PIN, LOW);
+    noTone(BUZZER_PIN);
+    delay(200);
+  }
+  delay(100);
+}
