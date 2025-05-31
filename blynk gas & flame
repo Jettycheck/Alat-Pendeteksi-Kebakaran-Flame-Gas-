@@ -1,0 +1,133 @@
+#define BLYNK_PRINT Serial
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+
+char auth[] = "YOUR_BLYNK_AUTH_TOKEN";
+char ssid[] = "YOUR_WIFI_SSID";
+char pass[] = "YOUR_WIFI_PASSWORD";
+
+#define FLAME_SENSOR_PIN A0
+#define BUZZER_PIN 6
+#define GAS_SENSOR_PIN A1
+#define LED_PIN 5
+
+const int AMBANG_API_TERDETEKSI = 500;
+const int AMBANG_GAS_BAHAYA = 400;
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+bool alarmApiAktif = false;
+bool alarmGasAktif = false;
+bool alarmKebakaranAktif = false;
+
+BlynkTimer timer;
+
+void sendSensorData() {
+  int flameValue = analogRead(FLAME_SENSOR_PIN);
+  int gasValue = analogRead(GAS_SENSOR_PIN);
+
+  Blynk.virtualWrite(V0, flameValue);
+  Blynk.virtualWrite(V1, gasValue);
+
+  alarmApiAktif = (flameValue < AMBANG_API_TERDETEKSI);
+  alarmGasAktif = (gasValue >= AMBANG_GAS_BAHAYA);
+
+  if (!alarmApiAktif && !alarmGasAktif) {
+    Blynk.virtualWrite(V2, 0);
+    Blynk.virtualWrite(V3, 0);
+    Blynk.virtualWrite(V4, 0);
+    Blynk.virtualWrite(V5, 0);
+    Blynk.setProperty(V6, "color", "#00FF00");
+    Blynk.virtualWrite(V6, "AMAN");
+  } else if (alarmApiAktif && !alarmGasAktif) {
+    Blynk.virtualWrite(V2, 0);
+    Blynk.virtualWrite(V3, 255);
+    Blynk.virtualWrite(V4, 0);
+    Blynk.virtualWrite(V5, 0);
+    Blynk.setProperty(V6, "color", "#FFA500");
+    Blynk.virtualWrite(V6, "API TERDETEKSI!");
+  } else if (!alarmApiAktif && alarmGasAktif) {
+    Blynk.virtualWrite(V2, 0);
+    Blynk.virtualWrite(V3, 0);
+    Blynk.virtualWrite(V4, 255);
+    Blynk.virtualWrite(V5, 0);
+    Blynk.setProperty(V6, "color", "#FFA500");
+    Blynk.virtualWrite(V6, "GAS BERBAHAYA!");
+  } else if (alarmApiAktif && alarmGasAktif) {
+    Blynk.virtualWrite(V2, 0);
+    Blynk.virtualWrite(V3, 0);
+    Blynk.virtualWrite(V4, 0);
+    Blynk.virtualWrite(V5, 255);
+    Blynk.setProperty(V6, "color", "#FF0000");
+    Blynk.virtualWrite(V6, "KEBAKARAN!");
+  }
+}
+
+void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(FLAME_SENSOR_PIN, INPUT);
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Sistem Deteksi");
+  lcd.setCursor(0, 1);
+  lcd.print(" Api & Gas");
+  delay(2000);
+  lcd.clear();
+
+  Blynk.begin(auth, ssid, pass);
+
+  timer.setInterval(2000L, sendSensorData);
+
+  Serial.println("Sistem Deteksi Api & Gas Aktif!");
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
+
+  bool apiTerdeteksi = (analogRead(FLAME_SENSOR_PIN) < AMBANG_API_TERDETEKSI);
+  bool gasTerdeteksi = (analogRead(GAS_SENSOR_PIN) >= AMBANG_GAS_BAHAYA);
+
+  if (!apiTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, LOW);
+    lcd.setCursor(0, 0);
+    lcd.print("Api:"); lcd.print(analogRead(FLAME_SENSOR_PIN));
+    lcd.setCursor(0, 1);
+    lcd.print("Gas:"); lcd.print(analogRead(GAS_SENSOR_PIN)); lcd.print(" AMAN ");
+  } else if (apiTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print("API TERDETEKSI!");
+  } else if (!apiTerdeteksi && gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print(" GAS TERDETEKSI!");
+  } else if (apiTerdeteksi && gasTerdeteksi) {
+    tone(BUZZER_PIN, 1000);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!!! KEBAKARAN !!!");
+    lcd.setCursor(0, 1);
+    lcd.print("API & GAS! ");
+    delay(200);
+    digitalWrite(LED_PIN, LOW);
+    noTone(BUZZER_PIN);
+    delay(200);
+  }
+  delay(100);
+}
