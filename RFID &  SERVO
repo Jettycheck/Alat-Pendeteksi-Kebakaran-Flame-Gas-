@@ -1,0 +1,85 @@
+/* Sistem Pengunci Pintu dengan RFID
+ * Sumber: https://srituhobby.com (disesuaikan)
+ */
+
+#include <Servo.h>
+#include <LiquidCrystal_I2C.h>
+#include <SPI.h>
+#include <MFRC522.h>
+
+// Definisi pin untuk modul RFID
+#define SS_PIN 10
+#define RST_PIN 9
+
+String uidTerdaftar = "";  // UID kartu yang diizinkan
+byte statusKunci = 0;      // 0 = terkunci, 1 = terbuka
+
+Servo motorServo;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+MFRC522 rfid(SS_PIN, RST_PIN);
+
+void setup() {
+  Serial.begin(9600);                 // Mulai komunikasi serial
+  motorServo.write(70);              // Posisi awal motor (terkunci)
+  lcd.init();                        // Inisialisasi LCD
+  lcd.backlight();                   // Nyalakan lampu latar
+  motorServo.attach(3);             // Hubungkan motor ke pin 3
+  SPI.begin();                       // Mulai komunikasi SPI
+  rfid.PCD_Init();                   // Inisialisasi RFID
+}
+
+void loop() {
+  lcd.setCursor(4, 0);
+  lcd.print("Selamat Datang!");
+  lcd.setCursor(1, 1);
+  lcd.print("Tempelkan Kartu");
+
+  // Periksa apakah ada kartu yang baru didekatkan
+  if ( ! rfid.PICC_IsNewCardPresent())
+    return;
+  if ( ! rfid.PICC_ReadCardSerial())
+    return;
+
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Membaca Kartu");
+  Serial.print("UID kartu: ");
+
+  String idTerdeteksi = "";
+  for (byte i = 0; i < rfid.uid.size; i++) {
+    lcd.print(".");
+    idTerdeteksi.concat(String(rfid.uid.uidByte[i] < 0x10 ? " 0" : " "));
+    idTerdeteksi.concat(String(rfid.uid.uidByte[i], HEX));
+    delay(300);
+  }
+  idTerdeteksi.toUpperCase();
+
+  // Jika kartu cocok dan pintu terkunci
+  if (idTerdeteksi.substring(1) == uidTerdaftar && statusKunci == 0 ) {
+    motorServo.write(70);  // Kunci pintu
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Pintu Dikunci");
+    delay(1500);
+    lcd.clear();
+    statusKunci = 1;
+  }
+  // Jika kartu cocok dan pintu sudah terkunci
+  else if (idTerdeteksi.substring(1) == uidTerdaftar && statusKunci == 1 ) {
+    motorServo.write(160);  // Buka kunci pintu
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Pintu Terbuka");
+    delay(1500);
+    lcd.clear();
+    statusKunci = 0;
+  }
+  // Jika kartu tidak cocok
+  else {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Kartu Salah!");
+    delay(1500);
+    lcd.clear();
+  }
+}
