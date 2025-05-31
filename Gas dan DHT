@@ -1,0 +1,96 @@
+#include <DHT.h>
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+
+#define DHTPIN 8
+#define DHTTYPE DHT22
+#define BUZZER_PIN 6
+#define GAS_SENSOR_PIN A1
+#define LED_PIN 5
+
+const float AMBANG_SUHU_BAHAYA = 45.0;
+const int AMBANG_GAS_BAHAYA = 400;
+
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Sistem Deteksi");
+  lcd.setCursor(0, 1);
+  lcd.print("   Kebakaran");
+  delay(2000);
+  lcd.clear();
+
+  dht.begin();
+
+  Serial.println("Sistem Deteksi Kebakaran Aktif!");
+}
+
+void loop() {
+  float suhu = dht.readTemperature();
+  float kelembapan = dht.readHumidity();
+  int gasValue = analogRead(GAS_SENSOR_PIN);
+
+  Serial.print("Suhu: ");
+  Serial.print(suhu);
+  Serial.print("°C | Kelembapan: ");
+  Serial.print(kelembapan);
+  Serial.print("% | Gas: ");
+  Serial.println(gasValue);
+
+  bool suhuTerdeteksi = (suhu >= AMBANG_SUHU_BAHAYA);
+  bool gasTerdeteksi = (gasValue >= AMBANG_GAS_BAHAYA);
+
+  if (!suhuTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, LOW);
+    lcd.setCursor(0, 0);
+    lcd.print("  AMAN  ");
+    Serial.println("Status: AMAN");
+  }
+
+  else if (suhuTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print("SUHU TINGGI! ");
+    Serial.println("Status: Suhu Tinggi Terdeteksi!");
+  }
+  // Kondisi 3: Jika gas terdeteksi TAPI suhu tidak
+  else if (!suhuTerdeteksi && gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print(" GAS TERDETEKSI!");
+    Serial.println("Status: Gas Berbahaya Terdeteksi!");
+  }
+  // Kondisi 4: Jika gas dan suhu terdeteksi (Bahaya Kebakaran Nyata)
+  else if (suhuTerdeteksi && gasTerdeteksi) {
+    tone(BUZZER_PIN, 1000);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!!! KEBAKARAN !!!");
+    lcd.setCursor(0, 1);
+    lcd.print("API TERDETEKSI! ");
+    Serial.println("Status: KEBAKARAN TERDETEKSI (Suhu & Gas)!");
+    delay(1000);
+    digitalWrite(LED_PIN, LOW);
+    noTone(BUZZER_PIN);
+    delay(1000);
+  }
+
+  delay(2000);
+}
