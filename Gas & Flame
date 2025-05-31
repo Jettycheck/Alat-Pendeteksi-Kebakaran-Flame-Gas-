@@ -1,0 +1,78 @@
+#include <LiquidCrystal_I2C.h>
+#include <Wire.h>
+
+#define FLAME_SENSOR_PIN A0
+#define BUZZER_PIN 6
+#define GAS_SENSOR_PIN A1
+#define LED_PIN 5
+
+const int AMBANG_API_TERDETEKSI = 500;
+const int AMBANG_GAS_BAHAYA = 400;
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+void setup() {
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+  pinMode(FLAME_SENSOR_PIN, INPUT);
+
+  Serial.begin(9600);
+
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Sistem Deteksi");
+  lcd.setCursor(0, 1);
+  lcd.print(" Api & Gas");
+  delay(2000);
+  lcd.clear();
+
+  Serial.println("Sistem Deteksi Api & Gas Aktif!");
+}
+
+void loop() {
+  int flameValue = analogRead(FLAME_SENSOR_PIN);
+  int gasValue = analogRead(GAS_SENSOR_PIN);
+
+  bool apiTerdeteksi = (flameValue < AMBANG_API_TERDETEKSI);
+  bool gasTerdeteksi = (gasValue >= AMBANG_GAS_BAHAYA);
+
+  if (!apiTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, LOW);
+    lcd.setCursor(0, 0);
+    lcd.print("  AMAN  ");
+    Serial.println("Status: AMAN");
+  } else if (apiTerdeteksi && !gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print("API TERDETEKSI!");
+    Serial.println("Status: Api Terdeteksi!");
+  } else if (!apiTerdeteksi && gasTerdeteksi) {
+    noTone(BUZZER_PIN);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!! BAHAYA !!    ");
+    lcd.setCursor(0, 1);
+    lcd.print(" GAS TERDETEKSI!");
+    Serial.println("Status: Gas Berbahaya Terdeteksi!");
+  } else if (apiTerdeteksi && gasTerdeteksi) {
+    tone(BUZZER_PIN, 1000);
+    digitalWrite(LED_PIN, HIGH);
+    lcd.setCursor(0, 0);
+    lcd.print("!!! KEBAKARAN !!!");
+    lcd.setCursor(0, 1);
+    lcd.print("API & GAS! ");
+    Serial.println("Status: KEBAKARAN TERDETEKSI (Api & Gas)!");
+    delay(1000);
+    digitalWrite(LED_PIN, LOW);
+    noTone(BUZZER_PIN);
+    delay(1000);
+  }
+
+  delay(2000);
+}
